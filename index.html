@@ -102,6 +102,10 @@ button{cursor:pointer}
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px" id="team-grid"></div>
     <div id="pw-block" style="display:none" class="fade">
       <input type="password" id="pw-input" placeholder="Парола" style="margin-bottom:8px" onkeydown="if(event.key==='Enter')doLogin()"/>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;padding:0 2px">
+        <input type="checkbox" id="remember-me" style="width:16px;height:16px;accent-color:#d4a017;cursor:pointer"/>
+        <label for="remember-me" style="font-size:12px;color:#888;cursor:pointer">Запомни паролата</label>
+      </div>
       <div id="pw-err" style="color:#fc8181;font-size:12px;text-align:center;margin-bottom:8px;display:none">Грешна парола</div>
       <button onclick="doLogin()" style="width:100%;padding:13px;background:#d4a017;border:none;border-radius:10px;color:#000;font-size:15px;font-weight:700">Влез →</button>
     </div>
@@ -353,13 +357,30 @@ function renderLogin(){
   document.getElementById('login-firm-name').textContent=FIRM.name||'Тефтер';
   const teams=FIRM.teams||[];
   document.getElementById('team-grid').innerHTML=teams.map(t=>`<button id="tb-${t.id}" onclick="selectTeam('${t.id}')" style="padding:13px 10px;border-radius:12px;border:1.5px solid #2a2a2a;background:#161616;color:#888;font-size:13px;font-weight:600;display:flex;align-items:center;justify-content:center;gap:5px">${t.role==='boss'?'★':''} ${t.name}</button>`).join('');
+  // Auto-login if saved credentials exist
+  const savedTeam=localStorage.getItem('saved_team_'+FIRM.id);
+  if(savedTeam){
+    setTimeout(()=>selectTeam(savedTeam),100);
+  }
 }
 function selectTeam(id){
   selTeam=id;
   document.querySelectorAll('#team-grid button').forEach(b=>{b.style.border='1.5px solid #2a2a2a';b.style.background='#161616';b.style.color='#888';});
   const b=document.getElementById('tb-'+id);b.style.border='2px solid #d4a017';b.style.background='#1a1500';b.style.color='#d4a017';
   document.getElementById('pw-block').style.display='block';
-  setTimeout(()=>document.getElementById('pw-input').focus(),100);
+  // Auto-fill saved password
+  const savedPw=localStorage.getItem('saved_pw_'+FIRM.id+'_'+id);
+  const pwInput=document.getElementById('pw-input');
+  const rememberCb=document.getElementById('remember-me');
+  if(savedPw&&pwInput){
+    pwInput.value=savedPw;
+    if(rememberCb)rememberCb.checked=true;
+    setTimeout(()=>pwInput.focus(),100);
+  } else {
+    if(pwInput)pwInput.value='';
+    if(rememberCb)rememberCb.checked=false;
+    setTimeout(()=>pwInput?.focus(),100);
+  }
 }
 function doLogin(){
   const team=(FIRM.teams||[]).find(t=>t.id===selTeam);
@@ -367,7 +388,17 @@ function doLogin(){
   if(!team)return;
   if(team.password===pw){
     document.getElementById('pw-err').style.display='none';
-    USER=team;document.getElementById('pw-input').value='';
+    USER=team;
+    // Save password if "remember me" checked
+    const remember=document.getElementById('remember-me')?.checked;
+    if(remember){
+      localStorage.setItem('saved_team_'+FIRM.id, team.id);
+      localStorage.setItem('saved_pw_'+FIRM.id+'_'+team.id, pw);
+    } else {
+      localStorage.removeItem('saved_team_'+FIRM.id);
+      localStorage.removeItem('saved_pw_'+FIRM.id+'_'+team.id);
+    }
+    document.getElementById('pw-input').value='';
     // Save lastSeen in background — don't wait
     db.collection('firms').doc(FIRM.id).update({['lastSeen.'+team.id]:Date.now()}).catch(e=>{});
     startApp();
